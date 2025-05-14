@@ -1,0 +1,31 @@
+/* Простейший центрированный контейнер */
+body {
+  margin: 0;
+  font-family: sans-serif;
+  display: flex;
+  height: 100vh;
+  align-items: center;
+  justify-content: center;
+  background: #1e1e2f;
+  color: #fff;
+}
+#app {
+  text-align: center;
+}
+button {
+  margin-top: 1em;
+  padding: 0.5em 1em;
+  background: #4f46e5;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+}
+input {
+  padding: 0.5em;
+  width: 200px;
+  border-radius: 4px;
+  border: 1px solid #444;
+  background: #2a2a3b;
+  color: #fff;
+}
