@@ -90,6 +90,8 @@ document.getElementById('saveBtn').onclick = () => {
 document.getElementById('showStatBtn').onclick = async () => {
   const nick = localStorage.getItem(`mk_nick_${tgId}`) || document.getElementById('nickname').value.trim();
   const resDiv = document.getElementById('result');
+  const battles = userData.statistics.battles ?? userData.statistics.pvp?.battles;
+  window.currentBattles = battles; // добавь вот эту строку!
   if (!nick) return alert('Сначала сохраните ник!');
 
   resDiv.innerHTML = 'Загружаем...';
