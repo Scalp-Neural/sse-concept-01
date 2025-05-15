@@ -2,6 +2,14 @@ console.log("Telegram:", window.Telegram);
 console.log("Telegram.WebApp:", window.Telegram?.WebApp);
 console.log("Telegram.WebApp.initDataUnsafe:", window.Telegram?.WebApp?.initDataUnsafe);
 
+document.addEventListener("DOMContentLoaded", function() {
+  if (window.Telegram && window.Telegram.WebApp) {
+    alert(JSON.stringify(window.Telegram.WebApp.initDataUnsafe, null, 2));
+  } else {
+    alert("Нет Telegram WebApp!");
+  }
+});
+
 // Функция для получения TG ID (только в Telegram WebApp!)
 // Для отладки на github pages добавь fallback на 'test_id'
 function getTgId() {
