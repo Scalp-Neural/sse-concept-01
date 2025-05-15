@@ -1,3 +1,7 @@
+console.log("Telegram:", window.Telegram);
+console.log("Telegram.WebApp:", window.Telegram?.WebApp);
+console.log("Telegram.WebApp.initDataUnsafe:", window.Telegram?.WebApp?.initDataUnsafe);
+
 // Функция для получения TG ID (только в Telegram WebApp!)
 // Для отладки на github pages добавь fallback на 'test_id'
 function getTgId() {
