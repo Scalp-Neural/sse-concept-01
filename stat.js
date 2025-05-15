@@ -20,6 +20,21 @@ window.addEventListener('DOMContentLoaded', () => {
   console.log(info);
 });
 
+// --- ... (остальной код остается прежним) ---
+
+// Новая функция для отправки данных в Telegram боту
+document.getElementById('sendToBotBtn').onclick = () => {
+  const nick = document.getElementById('nickname').value.trim();
+  if (!nick) return alert('Введите ник!');
+  if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.sendData) {
+    window.Telegram.WebApp.sendData(JSON.stringify({ nickname: nick }));
+    alert('Данные отправлены боту!');
+  } else {
+    alert('WebApp API Telegram недоступен');
+  }
+};
+
+
 // Функция для получения TG ID (только в Telegram WebApp!)
 // Для отладки на github pages добавь fallback на 'test_id'
 function getTgId() {
