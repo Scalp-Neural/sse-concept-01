@@ -2,15 +2,23 @@ console.log("Telegram:", window.Telegram);
 console.log("Telegram.WebApp:", window.Telegram?.WebApp);
 console.log("Telegram.WebApp.initDataUnsafe:", window.Telegram?.WebApp?.initDataUnsafe);
 
-document.addEventListener("DOMContentLoaded", function() {
-  if (window.Telegram && window.Telegram.WebApp) {
-    console.log("Telegram WebApp инициализирован:", window.Telegram.WebApp);
-    console.log("initDataUnsafe:", window.Telegram.WebApp.initDataUnsafe);
+window.addEventListener('DOMContentLoaded', () => {
+  let info = '';
+  if (window.Telegram) {
+    info += 'window.Telegram exists!\n';
+    if (window.Telegram.WebApp) {
+      info += 'window.Telegram.WebApp exists!\n';
+      info += 'initData: ' + (window.Telegram.WebApp.initData || 'undefined') + '\n';
+      info += 'initDataUnsafe: ' + JSON.stringify(window.Telegram.WebApp.initDataUnsafe) + '\n';
+    } else {
+      info += 'window.Telegram.WebApp is undefined\n';
+    }
   } else {
-    console.log("Telegram WebApp не инициализирован");
+    info += 'window.Telegram is undefined\n';
   }
+  alert(info);
+  console.log(info);
 });
-
 
 // Функция для получения TG ID (только в Telegram WebApp!)
 // Для отладки на github pages добавь fallback на 'test_id'
