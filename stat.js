@@ -52,6 +52,30 @@ function getTgId() {
 }
 const tgId = getTgId();
 
+// Подключение Supabase
+const supabaseUrl = 'https://tmsdshckyohzupgppixh.supabase.co'; // <-- Твой Project URL
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtc2RzaGNreW9oenVwZ3BwaXhoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDczMjU0MDUsImV4cCI6MjA2MjkwMTQwNX0.etUl3H4GDtgDzXc1seY9z8-kMvKThONWwSOMHtBC_o8'; // <-- Твой anon public key
+const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+document.getElementById('saveToSupabaseBtn').onclick = async () => {
+  const nick = document.getElementById('nickname').value.trim();
+  if (!nick) return alert('Введите ник!');
+  const battles = window.currentBattles || 0; // см. ниже!
+  const tg_id = getTgId();
+  const updated_at = new Date().toISOString();
+
+  // Сохраняем в Supabase
+  const { data, error } = await supabase.from('user_stats').upsert([
+    { tg_id, nickname: nick, battles, updated_at }
+  ], { onConflict: ['tg_id'] });
+
+  if (error) {
+    alert('Ошибка при сохранении в БД: ' + error.message);
+  } else {
+    alert('Данные сохранены в Supabase!');
+  }
+};
+
 const savedNick = localStorage.getItem(`mk_nick_${tgId}`);
 if (savedNick) document.getElementById('nickname').value = savedNick;
 
