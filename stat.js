@@ -23,11 +23,12 @@ const tgId = getTgId();
 let activeTimerInterval = null;
 
 function renderUserStat(data, resDiv) {
-  resDiv.innerHTML = `
-    <b>Ник:</b> ${data.nickname || 'N/A'}<br>
-    <b>Боев:</b> ${data.battles != null ? data.battles : 'N/A'}<br>
-  `;
+  // Очищаем предыдущее сообщение о БЗ или ошибке перед рендером основной статы
+  let baseContent = `<b>Ник:</b> ${data.nickname || 'N/A'}<br><b>Боев:</b> ${data.battles != null ? data.battles : 'N/A'}<br>`;
+  resDiv.innerHTML = baseContent; // Сначала базовая инфа
+  return baseContent; // Возвращаем базовый контент для возможного использования в checkMission
 }
+
 
 function renderMissionBtn(show, timerSec = 0) {
   const btnBox = document.getElementById('missionBtnBox');
@@ -56,7 +57,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (!resDiv || !nickBlock || !refreshBtn || !promoDiv) {
     console.error("Один или несколько ключевых HTML элементов не найдены!");
-    alert("Произошла ошибка инициализации интерфейса. Пожалуйста, обновите страницу.");
+    resDiv.innerHTML = '<span class="error-message">Ошибка инициализации интерфейса. Обновите.</span>';
     return;
   }
 
@@ -72,15 +73,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (fetchError) {
       console.error("Ошибка получения данных пользователя из Supabase:", fetchError);
-      resDiv.innerHTML = 'Не удалось загрузить данные пользователя. Попробуйте позже.';
+      resDiv.innerHTML = '<span class="error-message">Не удалось загрузить данные. Попробуйте позже.</span>';
       return;
     }
 
     if (row) {
       nickBlock.style.display = 'none';
       refreshBtn.style.display = '';
-      renderUserStat(row, resDiv);
-      await checkMission(row, resDiv, refreshBtn);
+      const baseContent = renderUserStat(row, resDiv);
+      await checkMission(row, resDiv, refreshBtn, baseContent);
     } else {
       nickBlock.style.display = '';
       refreshBtn.style.display = 'none';
@@ -88,7 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   } catch (e) {
     console.error("Общая ошибка в DOMContentLoaded:", e);
-    resDiv.innerHTML = 'Произошла непредвиденная ошибка при загрузке.';
+    resDiv.innerHTML = '<span class="error-message">Непредвиденная ошибка при загрузке.</span>';
   }
 });
 
@@ -106,12 +107,32 @@ document.getElementById('saveBtn').onclick = async () => {
 
   resDiv.innerHTML = 'Проверяем ник...';
   try {
+    // 1. Проверяем, не занят ли этот никнейм ДРУГИМ tg_id в нашей базе
+    let { data: existingUserWithNick, error: nickCheckError } = await supabase
+      .from('user_stats')
+      .select('tg_id')
+      .eq('nickname', nick)
+      .not('tg_id', 'eq', tgId)
+      .maybeSingle();
+
+    if (nickCheckError) {
+      console.error("Ошибка проверки уникальности ника в Supabase:", nickCheckError);
+      resDiv.innerHTML = '<span class="error-message">Ошибка при проверке ника в базе. Попробуйте позже.</span>';
+      return;
+    }
+
+    if (existingUserWithNick) {
+      resDiv.innerHTML = '<span class="warning-message">Имя аккаунта уже используется другим пользователем. Пожалуйста, введите свой никнейм.</span>';
+      return;
+    }
+
+    // 2. Если ник свободен, продолжаем проверку в API korabli.su
     const listResp = await fetch(`https://api.korabli.su/wows/account/list/?application_id=2ed4a3f67dc2d36d19643b616433ad9a&search=${encodeURIComponent(nick)}`);
     if (!listResp.ok) throw new Error(`Ошибка API korabli (list): ${listResp.status}`);
     const listData = await listResp.json();
 
     if (listData.status === 'error' || !listData.data || !listData.data.length) {
-      resDiv.innerHTML = 'Ник не найден в игре!';
+      resDiv.innerHTML = '<span class="warning-message">Ник не найден в игре!</span>';
       return;
     }
     const accountId = listData.data[0].account_id;
@@ -121,44 +142,49 @@ document.getElementById('saveBtn').onclick = async () => {
     const statData = await statResp.json();
 
     if (statData.status === 'error' || !statData.data || !statData.data[accountId]) {
-      resDiv.innerHTML = 'Не удалось получить статистику для ника.';
+      resDiv.innerHTML = '<span class="warning-message">Не удалось получить статистику для ника.</span>';
       return;
     }
     const userData = statData.data[accountId];
     if (!userData.statistics || (userData.statistics.battles == null && (!userData.statistics.pvp || userData.statistics.pvp.battles == null))) {
-      resDiv.innerHTML = 'Ошибка: не найдено количество боев в статистике!';
+      resDiv.innerHTML = '<span class="error-message">Ошибка: не найдено количество боев в статистике!</span>';
       return;
     }
     const battles = userData.statistics.battles ?? userData.statistics.pvp?.battles;
 
-    const newUserRecord = { tg_id: tgId, nickname: nick, battles };
-    const { error: insertError } = await supabase.from('user_stats').upsert(newUserRecord, { onConflict: 'tg_id' });
+    const newUserRecord = { tg_id: tgId, nickname: nick, battles: battles, mission_battles: null, mission_time: null, promo: null, promo_time: null };
+    const { error: upsertError } = await supabase.from('user_stats').upsert(newUserRecord, { onConflict: 'tg_id' });
 
-    if (insertError) {
-      console.error("Ошибка сохранения в БД (upsert):", insertError);
-      resDiv.innerHTML = 'Ошибка сохранения в БД: ' + insertError.message;
+    if (upsertError) {
+      console.error("Ошибка сохранения в БД (upsert):", upsertError);
+      resDiv.innerHTML = '<span class="error-message">Ошибка сохранения в БД: ' + upsertError.message + '</span>';
       return;
     }
 
-    renderUserStat(newUserRecord, resDiv);
+    const baseContent = renderUserStat(newUserRecord, resDiv);
     nickBlock.style.display = 'none';
     refreshBtn.style.display = '';
     document.getElementById('promo').innerHTML = '';
-    await checkMission(newUserRecord, resDiv, refreshBtn);
+    await checkMission(newUserRecord, resDiv, refreshBtn, baseContent);
 
   } catch (e) {
     console.error("Ошибка при сохранении/проверке ника:", e);
-    resDiv.innerHTML = `Ошибка: ${e.message || 'Произошла ошибка при получении статистики!'}`;
+    resDiv.innerHTML = `<span class="error-message">Ошибка: ${e.message || 'Произошла ошибка при получении статистики!'}</span>`;
   }
 };
 
 document.getElementById('refreshBtn').onclick = async () => {
   const resDiv = document.getElementById('result');
-  const promoDiv = document.getElementById('promo');
+  // const promoDiv = document.getElementById('promo'); // promoDiv управляется в checkMission
 
-  // Не очищаем resDiv полностью, чтобы пользователь видел текущие данные пока идет обновление
-  // resDiv.innerHTML = 'Обновляем статистику...'; // Можно заменить на менее навязчивое сообщение или индикатор
-  // promoDiv.innerHTML = ''; // Не очищаем промо сразу, checkMission разберется
+  // Сохраняем текущее содержимое resDiv, чтобы добавить к нему сообщение об обновлении, если нужно
+  // или перезаписать в случае ошибки
+  let statusMessage = document.createElement('span');
+  statusMessage.style.fontSize = '0.9em';
+  statusMessage.style.color = '#aaa';
+  statusMessage.innerText = '\nОбновление данных...';
+  resDiv.appendChild(statusMessage);
+
 
   try {
     let { data: row, error: fetchError } = await supabase
@@ -169,7 +195,8 @@ document.getElementById('refreshBtn').onclick = async () => {
 
     if (fetchError || !row) {
       console.error("Ошибка получения пользователя для обновления или пользователь не найден:", fetchError);
-      resDiv.innerHTML = 'Ошибка: не найден пользователь для обновления!'; // Перезаписываем, если критическая ошибка
+      renderUserStat({}, resDiv); // Очистить старые данные
+      resDiv.innerHTML += '<br><span class="error-message">Ошибка: не найден пользователь для обновления!</span>';
       return;
     }
 
@@ -178,7 +205,8 @@ document.getElementById('refreshBtn').onclick = async () => {
     const listData = await listResp.json();
 
     if (listData.status === 'error' || !listData.data || !listData.data.length) {
-      resDiv.innerHTML = 'Ник не найден в игре при обновлении!';
+      renderUserStat(row, resDiv); // Показать старые данные
+      resDiv.innerHTML += `<br><span class="warning-message">Ник ${row.nickname} не найден в игре при обновлении!</span>`;
       return;
     }
     const accountId = listData.data[0].account_id;
@@ -188,79 +216,79 @@ document.getElementById('refreshBtn').onclick = async () => {
     const statData = await statResp.json();
 
     if (statData.status === 'error' || !statData.data || !statData.data[accountId]) {
-      resDiv.innerHTML = 'Не удалось получить статистику для обновления.';
+      renderUserStat(row, resDiv);
+      resDiv.innerHTML += '<br><span class="warning-message">Не удалось получить статистику для обновления.</span>';
       return;
     }
     const userData = statData.data[accountId];
      if (!userData.statistics || (userData.statistics.battles == null && (!userData.statistics.pvp || userData.statistics.pvp.battles == null))) {
-      resDiv.innerHTML = 'Ошибка: не найдено количество боев в статистике для обновления!';
+      renderUserStat(row, resDiv);
+      resDiv.innerHTML += '<br><span class="error-message">Ошибка: не найдено количество боев в статистике для обновления!</span>';
       return;
     }
     const currentBattles = userData.statistics.battles ?? userData.statistics.pvp?.battles;
-    row.battles = currentBattles; // Обновляем бои в локальном объекте row
+    
+    let updatePayload = { battles: currentBattles };
 
     if (row.mission_time && row.mission_battles != null && !row.promo) {
       if (currentBattles > row.mission_battles) {
         const promoCode = generatePromo();
         const promoTime = new Date().toISOString();
-        const { error: updateError } = await supabase.from('user_stats').update({
-          battles: currentBattles,
+        
+        Object.assign(updatePayload, {
           promo: promoCode,
           promo_time: promoTime,
           mission_time: null,
           mission_battles: null
-        }).eq('tg_id', tgId);
-
-        if (updateError) throw updateError;
-
+        });
+        
         row.promo = promoCode;
         row.promo_time = promoTime;
         row.mission_time = null;
         row.mission_battles = null;
-
-        // renderUserStat и checkMission далее обновят интерфейс
       }
-    } else {
-        // Если промо не выдается, просто обновляем бои
-        const { error: updateBattlesError } = await supabase.from('user_stats').update({ battles: currentBattles }).eq('tg_id', tgId);
-        if (updateBattlesError) throw updateBattlesError;
     }
+    
+    row.battles = currentBattles; // Обновляем бои в локальном объекте row в любом случае
 
-    // Обновляем отображение основной статистики и состояния миссии/промо
-    renderUserStat(row, resDiv);
-    await checkMission(row, resDiv, document.getElementById('refreshBtn'));
+    const { error: updateError } = await supabase.from('user_stats').update(updatePayload).eq('tg_id', tgId);
+    if (updateError) throw updateError;
+
+    const baseContent = renderUserStat(row, resDiv);
+    await checkMission(row, resDiv, document.getElementById('refreshBtn'), baseContent);
 
   } catch (e) {
     console.error("Ошибка при обновлении статистики:", e);
-    // Показываем ошибку, но стараемся не затирать существующую статистику если возможно
-    const currentResContent = resDiv.innerHTML;
-    resDiv.innerHTML = `${currentResContent}<br><span style="color:red;">Ошибка обновления: ${e.message || 'Неизвестная ошибка'}</span>`;
+    // resDiv.innerHTML уже содержит предыдущую статистику, добавим ошибку
+    let { data: currentRow } = await supabase.from('user_stats').select('*').eq('tg_id', tgId).maybeSingle(); // Попытка получить актуальные данные
+    const base = renderUserStat(currentRow || { nickname: 'N/A', battles: 'N/A'}, resDiv);
+    resDiv.innerHTML = base + `<br><span class="error-message">Ошибка обновления: ${e.message || 'Неизвестная ошибка'}</span>`;
   }
 };
 
 async function onGetMission() {
   const resDiv = document.getElementById('result');
-  const promoDiv = document.getElementById('promo');
-  // resDiv.innerHTML = 'Получаем боевую задачу...'; // Не перезаписываем все, а добавляем
-  // promoDiv.innerHTML = ''; // checkMission позаботится об этом
+  resDiv.innerHTML += '\nПолучаем боевую задачу...';
+
 
   try {
     let { data: row, error: fetchError } = await supabase
       .from('user_stats')
-      .select('nickname, battles')
+      .select('nickname, battles, mission_battles, mission_time, promo, promo_time') // Запрашиваем все нужные поля
       .eq('tg_id', tgId)
       .maybeSingle();
 
     if (fetchError || !row) {
       console.error("Ошибка получения пользователя для БЗ:", fetchError);
-      resDiv.innerHTML = 'Ошибка: не найден пользователь для получения БЗ!';
+      renderUserStat(row || {}, resDiv);
+      resDiv.innerHTML += '<br><span class="error-message">Ошибка: не найден пользователь для получения БЗ!</span>';
       return;
     }
 
     const listResp = await fetch(`https://api.korabli.su/wows/account/list/?application_id=2ed4a3f67dc2d36d19643b616433ad9a&search=${encodeURIComponent(row.nickname)}`);
     if (!listResp.ok) throw new Error(`Ошибка API korabli (list): ${listResp.status}`);
     const listData = await listResp.json();
-    if (listData.status === 'error' || !listData.data || !listData.data.length) throw new Error('Ник не найден при получении БЗ');
+    if (listData.status === 'error' || !listData.data || !listData.data.length) throw new Error(`Ник ${row.nickname} не найден при получении БЗ`);
     const accountId = listData.data[0].account_id;
 
     const statResp = await fetch(`https://api.korabli.su/wows/account/info/?application_id=2ed4a3f67dc2d36d19643b616433ad9a&account_id=${accountId}`);
@@ -285,22 +313,21 @@ async function onGetMission() {
     const { error: updateError } = await supabase.from('user_stats').update(missionUpdate).eq('tg_id', tgId);
     if (updateError) throw updateError;
 
+    // Обновляем локальный объект row для отображения
     row.battles = currentBattlesForMission;
     row.mission_battles = currentBattlesForMission;
     row.mission_time = missionTime;
     row.promo = null;
     row.promo_time = null;
 
-    renderUserStat(row, resDiv);
-    // Сообщение о полученной БЗ будет сформировано в checkMission
-    await checkMission(row, resDiv, document.getElementById('refreshBtn'));
-
+    const baseContent = renderUserStat(row, resDiv);
+    await checkMission(row, resDiv, document.getElementById('refreshBtn'), baseContent);
 
   } catch (e) {
     console.error("Ошибка в onGetMission:", e);
-    // Показываем ошибку, но стараемся не затирать существующую статистику
-    const currentResContent = resDiv.innerHTML;
-    resDiv.innerHTML = `${currentResContent}<br><span style="color:red;">Ошибка получения БЗ: ${e.message || 'Неизвестная ошибка'}</span>`;
+    let { data: currentRow } = await supabase.from('user_stats').select('*').eq('tg_id', tgId).maybeSingle();
+    const base = renderUserStat(currentRow || { nickname: 'N/A', battles: 'N/A'}, resDiv);
+    resDiv.innerHTML = base + `<br><span class="error-message">Ошибка получения БЗ: ${e.message || 'Неизвестная ошибка'}</span>`;
   }
 }
 
@@ -310,7 +337,7 @@ function generatePromo() {
 
 function renderTimer(row, resDiv, secondsLeft) {
   const promoDiv = document.getElementById('promo');
-  const promoCodeText = row.promo ? `<b>Ваш промокод: ${row.promo}</b><br>` : '';
+  const promoCodeText = row.promo ? `<b>${row.promo}</b>` : ''; // Только код, текст "Ваш промокод" добавим ниже
 
   if (activeTimerInterval) {
     clearInterval(activeTimerInterval);
@@ -319,67 +346,67 @@ function renderTimer(row, resDiv, secondsLeft) {
   renderMissionBtn(false); // Скрываем кнопку "Получить БЗ"
 
   const updateTimerDisplay = () => {
+    let promoContent = '';
+    if (row.promo) {
+        promoContent += `Ваш промокод: ${promoCodeText}<br>`;
+    }
+
     if (timer <= 0) {
       clearInterval(activeTimerInterval);
       activeTimerInterval = null;
-      renderMissionBtn(true, 0); // Показать кнопку "Получить БЗ"
+      renderMissionBtn(true, 0);
       if (promoDiv) {
-        promoDiv.innerHTML = promoCodeText + 'Боевая задача снова доступна!';
+        promoDiv.innerHTML = promoContent + 'Боевая задача снова доступна!';
       }
-      // Возможно, стоит вызвать checkMission для полного обновления состояния,
-      // но это может быть избыточно и привести к рекурсии, если неаккуратно.
-      // Вместо этого, refreshBtn.onclick может быть нажат пользователем.
     } else {
       let hours = Math.floor(timer / 3600);
       let minutes = Math.floor((timer % 3600) / 60);
       let secs = timer % 60;
       if (promoDiv) {
-        promoDiv.innerHTML = promoCodeText +
-          `Следующая БЗ будет доступна через: ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        promoDiv.innerHTML = promoContent +
+          `Следующая БЗ будет доступна через: <br><span style="font-size: 1.2em; font-weight: bold;">${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}</span>`;
       }
       timer--;
     }
   };
-
   activeTimerInterval = setInterval(updateTimerDisplay, 1000);
-  updateTimerDisplay(); // Немедленный первый вызов для отображения таймера
+  updateTimerDisplay();
 }
 
-async function checkMission(row, resDiv, refreshBtn) {
+async function checkMission(row, resDiv, refreshBtn, baseContentHTML = null) {
   const promoDiv = document.getElementById('promo');
-  if (!promoDiv) return; // Если нет promoDiv, ничего не делаем с ним
+  if (!promoDiv) return;
 
-  // renderUserStat(row, resDiv); // Статистика пользователя всегда отображается перед спецификой миссии
+  // Используем baseContentHTML если передан, иначе получаем его из resDiv
+  // Это нужно, чтобы не затирать сообщения об ошибках, если они уже есть в resDiv
+  let currentResText = baseContentHTML || (resDiv.innerHTML.includes('<br>') ? resDiv.innerHTML.substring(0, resDiv.innerHTML.indexOf('<br>', resDiv.innerHTML.indexOf('<br>') + 1) +1) : resDiv.innerHTML);
+
 
   if (row.promo && row.promo_time) {
-    // Есть промокод, проверяем кулдаун для следующей БЗ
     const now = Date.now();
     const promoReceivedAt = new Date(row.promo_time).getTime();
     const nextMissionAvailableAt = promoReceivedAt + 12 * 60 * 60 * 1000; // 12 часов
     const secondsLeft = Math.max(0, Math.floor((nextMissionAvailableAt - now) / 1000));
 
-    renderMissionBtn(false); // Кнопка "Получить БЗ" скрыта
+    renderMissionBtn(false);
+    resDiv.innerHTML = currentResText; // Восстанавливаем базовую инфу, если checkMission ее модифицировал
 
     if (secondsLeft > 0) {
-      renderTimer(row, resDiv, secondsLeft); // Запускаем/обновляем таймер
+      renderTimer(row, resDiv, secondsLeft);
     } else {
-      // Кулдаун истек, можно брать новую БЗ
       renderMissionBtn(true, 0);
-      const promoCodeDisplay = row.promo ? `<b>Ваш промокод: ${row.promo}</b><br>` : '';
-      promoDiv.innerHTML = promoCodeDisplay + 'Боевая задача снова доступна!';
+      promoDiv.innerHTML = (row.promo ? `Ваш промокод: <b>${row.promo}</b><br>` : '') + 'Боевая задача снова доступна!';
     }
   } else if (row.mission_time && row.mission_battles != null) {
-    // Миссия активна, промокода еще нет
     renderMissionBtn(false);
-    promoDiv.innerHTML = ''; // Очищаем промо-блок, так как промокода нет
-    // Обновляем только текстовую часть в resDiv, основная статистика уже от renderUserStat
-    let currentResContent = resDiv.innerHTML.split('<br><b>Боевая задача активна')[0].split('<br><b>Сыграйте 1 бой')[0];
-    resDiv.innerHTML = currentResContent + '<br><b>Сыграйте 1 бой и нажмите ОБНОВИТЬ, чтобы получить награду!</b>';
+    promoDiv.innerHTML = '';
+    resDiv.innerHTML = currentResText + '<b>Сыграйте 1 бой и нажмите ОБНОВИТЬ, чтобы получить награду!</b>';
   } else {
-    // Миссия не взята, промокода нет (или его кулдаун истек и он просто отображается)
     renderMissionBtn(true, 0);
-    // Если есть старый промокод (без активного mission_time), просто показываем его.
-    // Если нет - очищаем.
-    promoDiv.innerHTML = row.promo ? `<b>Ваш промокод: ${row.promo}</b><br>Можно получить новую БЗ.` : '';
+    resDiv.innerHTML = currentResText; // Показываем только ник и бои
+    promoDiv.innerHTML = row.promo ? `Ваш промокод: <b>${row.promo}</b><br>Можно получить новую БЗ.` : 'Возьмите боевую задачу!';
+    if (!row.promo && !row.mission_time) { // Если нет ни промо, ни активной миссии
+        promoDiv.innerHTML = 'Возьмите боевую задачу, чтобы получить промокод!';
+    }
   }
 }
