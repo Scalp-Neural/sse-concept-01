@@ -16,31 +16,40 @@
         padding: 20px;
         display: flex;
         justify-content: center;
-        align-items: flex-start;
-        min-height: calc(100vh - 40px); /* Учитываем padding */
+        align-items: flex-start; /* Изменено на flex-start, чтобы блок загрузки был сверху, если окно маленькое */
+        min-height: calc(100vh - 40px); 
         box-sizing: border-box;
     }
     #appbox {
         max-width: 420px;
         width: 100%;
-        margin: 0 auto;
+        margin: 0 auto; /* Оставляем авто для горизонтального центрирования */
+        margin-top: 40px; /* Добавим отступ сверху, если align-items: flex-start */
         background: #292e36;
-        border-radius: 12px; /* Чуть больше скругление */
-        padding: 28px 24px; /* Немного измененный padding */
+        border-radius: 12px; 
+        padding: 28px 24px; 
         box-shadow: 0 5px 15px rgba(0, 0, 0, 0.25);
+        text-align: center; /* Для центрирования загрузки */
+    }
+    /* Стили для блока загрузки */
+    #loadingBlock {
+        padding: 40px 0; /* Отступы для блока загрузки */
+        font-size: 1.2em;
+        color: #a0a8b7;
     }
     input, button {
         font-size: 1em;
-        border-radius: 8px; /* Согласованное скругление */
-        padding: 12px 15px; /* Увеличенный padding для лучшего тапа */
+        border-radius: 8px; 
+        padding: 12px 15px; 
         margin-bottom: 12px;
         box-sizing: border-box;
         width: 100%;
-        border: 1px solid #3e444e; /* Более заметная граница для инпута */
+        border: 1px solid #3e444e; 
     }
     input {
         background: #2c313a;
         color: #fff;
+        text-align: left; /* Сброс text-align для инпута */
     }
     input::placeholder {
         color: #888e9e;
@@ -50,12 +59,12 @@
         color: #fff;
         cursor: pointer;
         transition: background 0.2s ease, transform 0.1s ease;
-        border: none; /* Убираем границу у кнопок, т.к. есть фон */
-        font-weight: 500; /* Немного жирнее текст кнопки */
+        border: none; 
+        font-weight: 500; 
     }
     button:hover:not(:disabled) {
         background: #1cb87f;
-        transform: translateY(-2px); /* Более заметный подъем */
+        transform: translateY(-2px); 
         box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     }
     button:active:not(:disabled) {
@@ -69,40 +78,41 @@
     }
     #nickBlock {
         margin-bottom: 20px;
+        text-align: left; /* Сброс text-align для блока с инпутом */
     }
     #nickBlock input {
-         margin-bottom: 10px; /* Отступ между инпутом и кнопкой "Войти" */
+         margin-bottom: 10px; 
     }
 
     #refreshBtn {
-        background: #007bff; /* Синий для "Обновить" */
-        margin-top: 15px; /* Отступ сверху */
+        background: #007bff; 
+        margin-top: 15px; 
     }
     #refreshBtn:hover:not(:disabled) {
         background: #0069d9;
     }
 
     #missionBtnBox {
-        margin-top: 15px; /* Отступ для контейнера кнопки БЗ */
-        margin-bottom: 5px; /* Небольшой отступ снизу, если за ней сразу #result */
+        margin-top: 15px; 
+        margin-bottom: 5px; 
     }
-     /* Кнопка внутри #missionBtnBox будет использовать общие стили button */
-
+   
     #result, #promo {
         margin-top: 24px;
-        padding: 18px; /* Увеличенный padding */
+        padding: 18px; 
         border-radius: 8px;
-        background: #313640; /* Чуть другой фон для выделения */
+        background: #313640; 
         border: 1px solid #4a505c;
         line-height: 1.6;
-        box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); /* Внутренняя тень */
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); 
+        text-align: left; /* Сброс text-align для этих блоков */
     }
     #result {
         font-size: 1.15em;
-        color: #cdd3e0; /* Светлее текст для лучшей читаемости */
+        color: #cdd3e0; 
     }
     #result b {
-        color: #82c9e0; /* Светло-голубой для выделений */
+        color: #82c9e0; 
         font-weight: 600;
     }
     #result .error-message {
@@ -115,35 +125,38 @@
     }
 
     #promo {
-        font-size: 1.25em; /* Немного крупнее */
+        font-size: 1.25em; 
         color: #fffd64;
-        text-align: center;
+        text-align: center; /* Оставляем центр для промо, если нужно */
     }
-    #promo b { /* Для самого промокода */
+    #promo b { 
         color: #ffffff;
-        font-weight: 700; /* Жирнее */
+        font-weight: 700; 
         display: block;
         margin-bottom: 8px;
-        font-size: 1.2em; /* Крупнее сам промокод */
-        letter-spacing: 1px; /* Небольшой разряд */
+        font-size: 1.2em; 
+        letter-spacing: 1px; 
     }
   </style>
 </head>
 <body>
   <div id="appbox">
-    <!-- Вход по нику -->
-    <div id="nickBlock">
+    <!-- Блок загрузки (виден по умолчанию) -->
+    <div id="loadingBlock">Загрузка...</div>
+
+    <!-- Вход по нику (скрыт по умолчанию) -->
+    <div id="nickBlock" style="display:none;">
       <input id="nickname" placeholder="Введите никнейм">
       <button id="saveBtn">Войти</button>
     </div>
-    <!-- Обновить бои -->
+    <!-- Обновить бои (скрыт по умолчанию) -->
     <button id="refreshBtn" style="display:none;">Обновить</button>
-    <!-- Кнопка "Получить боевую задачу" (рендерится JS'ом) -->
+    <!-- Кнопка "Получить боевую задачу" (рендерится JS'ом, контейнер будет виден когда надо) -->
     <div id="missionBtnBox"></div>
-    <!-- Основная инфа (ник, бои, задачи, промо) -->
-    <div id="result"></div>
-    <!-- Для промокода -->
-    <div id="promo"></div>
+    <!-- Основная инфа (ник, бои, задачи, промо) (скрыт по умолчанию, если есть блок загрузки) -->
+    <div id="result" style="display:none;"></div>
+    <!-- Для промокода (скрыт по умолчанию) -->
+    <div id="promo" style="display:none;"></div>
   </div>
   <script src="stat.js"></script>
 </body>
