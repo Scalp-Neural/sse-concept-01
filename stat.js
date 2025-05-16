@@ -250,9 +250,40 @@ document.getElementById('refreshBtn').onclick = async () => {
     if (row.mission_time && row.mission_battles != null && !row.promo) {
       if (currentBattles > row.mission_battles) {
         const promoCode = generatePromo();
-        const promoTime = new Date().toISOString();
-        Object.assign(updatePayload, { promo: promoCode, promo_time: promoTime, mission_time: null, mission_battles: null });
-        row.promo = promoCode; row.promo_time = promoTime; row.mission_time = null; row.mission_battles = null;
+        const promoTime = new Date().toISOString(); // Время получения промо
+        
+        Object.assign(updatePayload, {
+          promo: promoCode,
+          promo_time: promoTime,
+          mission_time: null,
+          mission_battles: null
+        });
+        
+        row.promo = promoCode;
+        row.promo_time = promoTime; // Это время используется для расчета кулдауна
+        row.mission_time = null;
+        row.mission_battles = null;
+
+        // ---> ВОТ ЭТОТ БЛОК НУЖНО ВСТАВИТЬ <---
+        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.isVersionAtLeast('6.1')) { // Проверка версии API для sendData
+            try {
+                const promoReceivedAt = new Date(row.promo_time).getTime();
+                // Кулдаун 12 часов, как и раньше
+                const nextMissionAvailableTimestamp = promoReceivedAt + 12 * 60 * 60 * 1000; 
+                
+                const dataToSend = JSON.stringify({
+                    type: "mission_cooldown_set",
+                    // tg_id отправлять не обязательно, т.к. бот получит chat_id из update
+                    next_available_at_iso: new Date(nextMissionAvailableTimestamp).toISOString()
+                });
+                window.Telegram.WebApp.sendData(dataToSend);
+                console.log("Данные о кулдауне БЗ отправлены боту:", dataToSend);
+            } catch (e) {
+                console.error("Ошибка отправки данных боту:", e);
+            }
+        } else {
+            console.warn("Telegram WebApp API или sendData не доступен/не поддерживается.");
+        }
       }
     }
     row.battles = currentBattles;
