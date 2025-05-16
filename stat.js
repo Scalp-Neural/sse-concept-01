@@ -22,14 +22,14 @@ function renderUserStat(data, resDiv) {
 }
 
 function renderMissionBtn(show, timerSec = 0) {
-  const btn = document.getElementById('getMissionBtn');
-  if (btn) btn.remove();
+  const btnBox = document.getElementById('missionBtnBox');
+  btnBox.innerHTML = '';
   if (show) {
     const missionBtn = document.createElement('button');
     missionBtn.id = 'getMissionBtn';
     missionBtn.innerText = timerSec > 0 ? `БЗ будет доступна через ${timerSec} сек.` : 'Получить боевую задачу!';
     missionBtn.disabled = timerSec > 0;
-    document.body.insertBefore(missionBtn, document.getElementById('result').nextSibling);
+    btnBox.appendChild(missionBtn);
     if (timerSec === 0) {
       missionBtn.onclick = onGetMission;
     }
