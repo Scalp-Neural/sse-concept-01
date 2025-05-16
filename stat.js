@@ -20,7 +20,6 @@ function getTgId() {
 }
 const tgId = getTgId();
 
-// УЛУЧШЕНИЕ: Переменная для хранения ID активного таймера
 let activeTimerInterval = null;
 
 function renderUserStat(data, resDiv) {
@@ -49,13 +48,6 @@ function renderMissionBtn(show, timerSec = 0) {
   }
 }
 
-// Глобальные переменные для состояния пользователя, если они действительно нужны глобально.
-// Рассмотрите возможность передавать их как часть объекта `row` или управлять состоянием более явно.
-// let mission_battles_global = null;
-// let mission_time_global = null;
-// let promo_code_global = null;
-// let last_battles_global = null;
-
 document.addEventListener('DOMContentLoaded', async () => {
   const resDiv = document.getElementById('result');
   const nickBlock = document.getElementById('nickBlock');
@@ -69,7 +61,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   refreshBtn.style.display = 'none';
-  promoDiv.innerHTML = ''; // Очищаем промо-блок при загрузке
+  promoDiv.innerHTML = '';
 
   try {
     let { data: row, error: fetchError } = await supabase
@@ -87,12 +79,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (row) {
       nickBlock.style.display = 'none';
       refreshBtn.style.display = '';
-      // last_battles_global = row.battles;
-      // mission_battles_global = row.mission_battles;
-      // mission_time_global = row.mission_time;
-      // promo_code_global = row.promo;
       renderUserStat(row, resDiv);
-      await checkMission(row, resDiv, refreshBtn); // promoDiv передается для отображения промокода внутри checkMission/renderTimer
+      await checkMission(row, resDiv, refreshBtn);
     } else {
       nickBlock.style.display = '';
       refreshBtn.style.display = 'none';
@@ -144,7 +132,7 @@ document.getElementById('saveBtn').onclick = async () => {
     const battles = userData.statistics.battles ?? userData.statistics.pvp?.battles;
 
     const newUserRecord = { tg_id: tgId, nickname: nick, battles };
-    const { error: insertError } = await supabase.from('user_stats').upsert(newUserRecord, { onConflict: 'tg_id' }); // Используем upsert для обновления если пользователь уже есть
+    const { error: insertError } = await supabase.from('user_stats').upsert(newUserRecord, { onConflict: 'tg_id' });
 
     if (insertError) {
       console.error("Ошибка сохранения в БД (upsert):", insertError);
@@ -155,8 +143,8 @@ document.getElementById('saveBtn').onclick = async () => {
     renderUserStat(newUserRecord, resDiv);
     nickBlock.style.display = 'none';
     refreshBtn.style.display = '';
-    document.getElementById('promo').innerHTML = ''; // Очищаем промо при новом входе/обновлении ника
-    await checkMission(newUserRecord, resDiv, refreshBtn); // Передаем новый (или обновленный) рекорд
+    document.getElementById('promo').innerHTML = '';
+    await checkMission(newUserRecord, resDiv, refreshBtn);
 
   } catch (e) {
     console.error("Ошибка при сохранении/проверке ника:", e);
@@ -168,8 +156,9 @@ document.getElementById('refreshBtn').onclick = async () => {
   const resDiv = document.getElementById('result');
   const promoDiv = document.getElementById('promo');
 
-  resDiv.innerHTML = 'Обновляем статистику...';
-  promoDiv.innerHTML = ''; // Очищаем промо при обновлении
+  // Не очищаем resDiv полностью, чтобы пользователь видел текущие данные пока идет обновление
+  // resDiv.innerHTML = 'Обновляем статистику...'; // Можно заменить на менее навязчивое сообщение или индикатор
+  // promoDiv.innerHTML = ''; // Не очищаем промо сразу, checkMission разберется
 
   try {
     let { data: row, error: fetchError } = await supabase
@@ -180,7 +169,7 @@ document.getElementById('refreshBtn').onclick = async () => {
 
     if (fetchError || !row) {
       console.error("Ошибка получения пользователя для обновления или пользователь не найден:", fetchError);
-      resDiv.innerHTML = 'Ошибка: не найден пользователь для обновления!';
+      resDiv.innerHTML = 'Ошибка: не найден пользователь для обновления!'; // Перезаписываем, если критическая ошибка
       return;
     }
 
@@ -208,11 +197,8 @@ document.getElementById('refreshBtn').onclick = async () => {
       return;
     }
     const currentBattles = userData.statistics.battles ?? userData.statistics.pvp?.battles;
+    row.battles = currentBattles; // Обновляем бои в локальном объекте row
 
-    // Обновляем данные в объекте row для дальнейшего использования
-    row.battles = currentBattles;
-
-    // Проверяем прирост для промокода
     if (row.mission_time && row.mission_battles != null && !row.promo) {
       if (currentBattles > row.mission_battles) {
         const promoCode = generatePromo();
@@ -221,48 +207,47 @@ document.getElementById('refreshBtn').onclick = async () => {
           battles: currentBattles,
           promo: promoCode,
           promo_time: promoTime,
-          mission_time: null, // Сбрасываем миссию после выдачи промо
+          mission_time: null,
           mission_battles: null
         }).eq('tg_id', tgId);
 
         if (updateError) throw updateError;
 
-        row.promo = promoCode; // Обновляем локальный row
+        row.promo = promoCode;
         row.promo_time = promoTime;
         row.mission_time = null;
         row.mission_battles = null;
 
-        renderUserStat(row, resDiv);
-        promoDiv.innerHTML = `<b>Ваш промокод: ${promoCode}</b>`;
-        // renderMissionBtn(false); // Кнопка будет обработана в checkMission или renderTimer
-        await checkMission(row, resDiv, document.getElementById('refreshBtn')); // Перепроверяем состояние, чтобы запустить таймер
-        return;
+        // renderUserStat и checkMission далее обновят интерфейс
       }
+    } else {
+        // Если промо не выдается, просто обновляем бои
+        const { error: updateBattlesError } = await supabase.from('user_stats').update({ battles: currentBattles }).eq('tg_id', tgId);
+        if (updateBattlesError) throw updateBattlesError;
     }
 
-    // Просто обновляем бои, если промокод не был выдан
-    const { error: updateBattlesError } = await supabase.from('user_stats').update({ battles: currentBattles }).eq('tg_id', tgId);
-    if (updateBattlesError) throw updateBattlesError;
-
-    renderUserStat(row, resDiv); // row уже содержит обновленные currentBattles
+    // Обновляем отображение основной статистики и состояния миссии/промо
+    renderUserStat(row, resDiv);
     await checkMission(row, resDiv, document.getElementById('refreshBtn'));
 
   } catch (e) {
     console.error("Ошибка при обновлении статистики:", e);
-    resDiv.innerHTML = `Ошибка: ${e.message || 'Произошла ошибка при обновлении!'}`;
+    // Показываем ошибку, но стараемся не затирать существующую статистику если возможно
+    const currentResContent = resDiv.innerHTML;
+    resDiv.innerHTML = `${currentResContent}<br><span style="color:red;">Ошибка обновления: ${e.message || 'Неизвестная ошибка'}</span>`;
   }
 };
 
 async function onGetMission() {
   const resDiv = document.getElementById('result');
   const promoDiv = document.getElementById('promo');
-  resDiv.innerHTML = 'Получаем боевую задачу...';
-  promoDiv.innerHTML = ''; // Очищаем промо
+  // resDiv.innerHTML = 'Получаем боевую задачу...'; // Не перезаписываем все, а добавляем
+  // promoDiv.innerHTML = ''; // checkMission позаботится об этом
 
   try {
     let { data: row, error: fetchError } = await supabase
       .from('user_stats')
-      .select('nickname, battles') // Запрашиваем только нужные поля
+      .select('nickname, battles')
       .eq('tg_id', tgId)
       .maybeSingle();
 
@@ -272,7 +257,6 @@ async function onGetMission() {
       return;
     }
 
-    // Получаем актуальное число боёв для mission_battles
     const listResp = await fetch(`https://api.korabli.su/wows/account/list/?application_id=2ed4a3f67dc2d36d19643b616433ad9a&search=${encodeURIComponent(row.nickname)}`);
     if (!listResp.ok) throw new Error(`Ошибка API korabli (list): ${listResp.status}`);
     const listData = await listResp.json();
@@ -294,29 +278,29 @@ async function onGetMission() {
     const missionUpdate = {
       mission_battles: currentBattlesForMission,
       mission_time: missionTime,
-      battles: currentBattlesForMission, // Также обновляем основное количество боев
+      battles: currentBattlesForMission,
       promo: null,
       promo_time: null
     };
     const { error: updateError } = await supabase.from('user_stats').update(missionUpdate).eq('tg_id', tgId);
     if (updateError) throw updateError;
 
-    // Обновляем локальный объект row для отображения
     row.battles = currentBattlesForMission;
     row.mission_battles = currentBattlesForMission;
     row.mission_time = missionTime;
     row.promo = null;
     row.promo_time = null;
 
-    renderUserStat(row, resDiv); // row.battles теперь актуальны
-    resDiv.innerHTML += `<br><b>Боевая задача получена! Теперь вам нужно сыграть несколько боев. После этого нажмите "Обновить".</b>`;
-    // renderMissionBtn(false); // Кнопка будет обработана в checkMission
+    renderUserStat(row, resDiv);
+    // Сообщение о полученной БЗ будет сформировано в checkMission
     await checkMission(row, resDiv, document.getElementById('refreshBtn'));
 
 
   } catch (e) {
     console.error("Ошибка в onGetMission:", e);
-    resDiv.innerHTML = `Ошибка: ${e.message || 'Не удалось получить БЗ!'}`;
+    // Показываем ошибку, но стараемся не затирать существующую статистику
+    const currentResContent = resDiv.innerHTML;
+    resDiv.innerHTML = `${currentResContent}<br><span style="color:red;">Ошибка получения БЗ: ${e.message || 'Неизвестная ошибка'}</span>`;
   }
 }
 
@@ -326,92 +310,76 @@ function generatePromo() {
 
 function renderTimer(row, resDiv, secondsLeft) {
   const promoDiv = document.getElementById('promo');
+  const promoCodeText = row.promo ? `<b>Ваш промокод: ${row.promo}</b><br>` : '';
 
   if (activeTimerInterval) {
-    clearInterval(activeTimerInterval); // Очищаем старый таймер, если он был
+    clearInterval(activeTimerInterval);
   }
+  let timer = Math.max(0, secondsLeft);
+  renderMissionBtn(false); // Скрываем кнопку "Получить БЗ"
 
-  let timer = Math.max(0, secondsLeft); // Убедимся, что таймер не отрицательный
-
-  renderMissionBtn(false); // Скрываем кнопку "Получить БЗ", пока идет таймер
-  if (promoDiv) promoDiv.innerHTML = `Следующая БЗ будет доступна через таймер.`;
-
-
-  activeTimerInterval = setInterval(() => {
-    const missionBtn = document.getElementById('getMissionBtn'); // Кнопка, которую мы создаем в renderMissionBtn
-
+  const updateTimerDisplay = () => {
     if (timer <= 0) {
       clearInterval(activeTimerInterval);
       activeTimerInterval = null;
       renderMissionBtn(true, 0); // Показать кнопку "Получить БЗ"
-      if (promoDiv) promoDiv.innerHTML = ''; // Очистить сообщение о таймере
-      // resDiv может быть перезаписан, лучше добавлять сообщение в promoDiv или отдельный статус-блок
-      const statusDiv = document.getElementById('promo') || resDiv; // Используем promo или result для сообщения
-      statusDiv.innerHTML += '<br><b>Боевая задача снова доступна!</b>';
-
-      // Перепроверяем состояние, чтобы убедиться, что все обновлено корректно
-      // Это может быть излишним, если renderMissionBtn(true,0) достаточно
-      // Но если нужно обновить `row` из базы и запустить полную логику `checkMission`:
-      // refreshBtn.click(); // Эмулируем клик для полного обновления состояния (осторожно, может вызвать рекурсию если не управлять состоянием)
-      // Или более контролируемый вызов:
-      // async () => {
-      //   let { data: freshRow } = await supabase.from('user_stats').select('*').eq('tg_id', tgId).maybeSingle();
-      //   if (freshRow) await checkMission(freshRow, resDiv, document.getElementById('refreshBtn'));
-      // })();
-
+      if (promoDiv) {
+        promoDiv.innerHTML = promoCodeText + 'Боевая задача снова доступна!';
+      }
+      // Возможно, стоит вызвать checkMission для полного обновления состояния,
+      // но это может быть избыточно и привести к рекурсии, если неаккуратно.
+      // Вместо этого, refreshBtn.onclick может быть нажат пользователем.
     } else {
       let hours = Math.floor(timer / 3600);
       let minutes = Math.floor((timer % 3600) / 60);
       let secs = timer % 60;
-      // Обновляем текст на кнопке, если она есть (она должна быть скрыта renderMissionBtn(false))
-      // Вместо этого, можно выводить таймер в promoDiv
-      if (promoDiv) promoDiv.innerHTML = `БЗ будет доступна через: ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      if (promoDiv) {
+        promoDiv.innerHTML = promoCodeText +
+          `Следующая БЗ будет доступна через: ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      }
       timer--;
     }
-  }, 1000);
+  };
+
+  activeTimerInterval = setInterval(updateTimerDisplay, 1000);
+  updateTimerDisplay(); // Немедленный первый вызов для отображения таймера
 }
 
 async function checkMission(row, resDiv, refreshBtn) {
   const promoDiv = document.getElementById('promo');
+  if (!promoDiv) return; // Если нет promoDiv, ничего не делаем с ним
 
-  // Если миссия не взята (нет времени или целевых боев)
-  if (!row.mission_time || row.mission_battles == null) { // Уточнена проверка на null для mission_battles
-    renderMissionBtn(true, 0); // Показать кнопку "Получить БЗ"
-    if (promoDiv && !row.promo) promoDiv.innerHTML = ''; // Очищаем промо, если его нет и миссия не взята
-    return;
-  }
+  // renderUserStat(row, resDiv); // Статистика пользователя всегда отображается перед спецификой миссии
 
-  // Если промокод уже выдан и есть время его получения
   if (row.promo && row.promo_time) {
+    // Есть промокод, проверяем кулдаун для следующей БЗ
     const now = Date.now();
     const promoReceivedAt = new Date(row.promo_time).getTime();
-    const nextMissionAvailableAt = promoReceivedAt + 12 * 60 * 60 * 1000; // 12 часов после получения промо
+    const nextMissionAvailableAt = promoReceivedAt + 12 * 60 * 60 * 1000; // 12 часов
     const secondsLeft = Math.max(0, Math.floor((nextMissionAvailableAt - now) / 1000));
 
-    renderMissionBtn(false); // Кнопка "Получить БЗ" скрыта, пока действует кулдаун промокода
-    if (promoDiv) promoDiv.innerHTML = `<b>Ваш промокод: ${row.promo}</b>`; // Показываем промокод
+    renderMissionBtn(false); // Кнопка "Получить БЗ" скрыта
 
     if (secondsLeft > 0) {
-      renderTimer(row, resDiv, secondsLeft); // Запускаем таймер до доступности следующей БЗ
+      renderTimer(row, resDiv, secondsLeft); // Запускаем/обновляем таймер
     } else {
-      // Время кулдауна промокода истекло, можно брать новую БЗ
-      if (promoDiv) promoDiv.innerHTML += '<br>Время действия промокода истекло. Можно получить новую БЗ.'; // Доп. инфо
-      renderMissionBtn(true, 0); // Показать кнопку "Получить БЗ"
-      // Можно также сбросить promo и promo_time в БД здесь, если это требуется по логике
-      // await supabase.from('user_stats').update({ promo: null, promo_time: null }).eq('tg_id', tgId);
-      // row.promo = null; row.promo_time = null; // Обновить локально
+      // Кулдаун истек, можно брать новую БЗ
+      renderMissionBtn(true, 0);
+      const promoCodeDisplay = row.promo ? `<b>Ваш промокод: ${row.promo}</b><br>` : '';
+      promoDiv.innerHTML = promoCodeDisplay + 'Боевая задача снова доступна!';
     }
   } else if (row.mission_time && row.mission_battles != null) {
-    // Миссия взята, но промокода еще нет (ожидаем выполнения БЗ)
-    renderMissionBtn(false); // Кнопка "Получить БЗ" скрыта
-    if (promoDiv) promoDiv.innerHTML = ''; // Очищаем промо-блок
-    // Сообщение о том, что нужно играть бои, выводится в onGetMission и при обновлении (если БЗ активна)
-    resDiv.innerHTML = ''; // Очищаем resDiv перед renderUserStat
-    renderUserStat(row, resDiv); // Показываем текущую статистику
-    resDiv.innerHTML += `<br><b>Боевая задача активна. Цель: ${row.mission_battles} боев. Сыграйте бои и нажмите "Обновить".</b>`;
+    // Миссия активна, промокода еще нет
+    renderMissionBtn(false);
+    promoDiv.innerHTML = ''; // Очищаем промо-блок, так как промокода нет
+    // Обновляем только текстовую часть в resDiv, основная статистика уже от renderUserStat
+    let currentResContent = resDiv.innerHTML.split('<br><b>Боевая задача активна')[0].split('<br><b>Сыграйте 1 бой')[0];
+    resDiv.innerHTML = currentResContent + '<br><b>Сыграйте 1 бой и нажмите ОБНОВИТЬ, чтобы получить награду!</b>';
   } else {
-    // Неопределенное состояние, по умолчанию предлагаем взять БЗ
+    // Миссия не взята, промокода нет (или его кулдаун истек и он просто отображается)
     renderMissionBtn(true, 0);
-    if (promoDiv) promoDiv.innerHTML = '';
+    // Если есть старый промокод (без активного mission_time), просто показываем его.
+    // Если нет - очищаем.
+    promoDiv.innerHTML = row.promo ? `<b>Ваш промокод: ${row.promo}</b><br>Можно получить новую БЗ.` : '';
   }
 }
