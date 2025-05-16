@@ -52,16 +52,29 @@ document.addEventListener('DOMContentLoaded', async () => {
   const nickBlock = document.getElementById('nickBlock');
   const refreshBtnElement = document.getElementById('refreshBtn');
   const promoDiv = document.getElementById('promo');
+  const loadingBlock = document.getElementById('loadingBlock'); // Ссылка на блок загрузки
+  const missionBtnBox = document.getElementById('missionBtnBox');
 
-  if (!resDiv || !nickBlock || !refreshBtnElement || !promoDiv) {
+  // Проверка на существование всех элементов
+  if (!resDiv || !nickBlock || !refreshBtnElement || !promoDiv || !loadingBlock || !missionBtnBox) {
     console.error("Один или несколько ключевых HTML элементов не найдены!");
-    resDiv.innerHTML = '<span class="error-message">Ошибка инициализации интерфейса. Обновите.</span>';
+    if (loadingBlock) loadingBlock.style.display = 'none';
+    if (resDiv) {
+        resDiv.innerHTML = '<span class="error-message">Ошибка инициализации интерфейса. Обновите.</span>';
+        resDiv.style.display = ''; // Показать блок с ошибкой, если он есть
+    }
     return;
   }
 
+  // Начальное состояние: Показываем загрузку, скрываем остальное
+  loadingBlock.style.display = '';
+  nickBlock.style.display = 'none';
   refreshBtnElement.style.display = 'none';
-  promoDiv.innerHTML = '';
-  promoDiv.style.display = 'none'; // Скрываем изначально
+  resDiv.style.display = 'none';
+  promoDiv.style.display = 'none';
+  promoDiv.innerHTML = ''; 
+  missionBtnBox.innerHTML = '';
+
 
   try {
     let { data: row, error: fetchError } = await supabase
@@ -70,31 +83,41 @@ document.addEventListener('DOMContentLoaded', async () => {
       .eq('tg_id', tgId)
       .maybeSingle();
 
+    loadingBlock.style.display = 'none'; // Скрываем загрузку после ответа
+
     if (fetchError) {
       console.error("Ошибка получения данных пользователя из Supabase:", fetchError);
       resDiv.innerHTML = '<span class="error-message">Не удалось загрузить данные. Попробуйте позже.</span>';
+      resDiv.style.display = ''; // Показать блок с ошибкой
       return;
     }
 
     if (row) {
-      nickBlock.style.display = 'none';
+      // nickBlock остается скрытым
       refreshBtnElement.style.display = '';
+      resDiv.style.display = '';
+      // promoDiv и missionBtnBox управляются checkMission
+
       const baseContent = renderUserStat(row, resDiv);
       await checkMission(row, resDiv, refreshBtnElement, baseContent);
     } else {
-      nickBlock.style.display = '';
-      refreshBtnElement.style.display = 'none';
+      nickBlock.style.display = ''; // Показываем ввод ника
+      // refreshBtnElement остается скрытым
+      resDiv.style.display = ''; // Показываем resDiv для сообщения
       resDiv.innerHTML = 'Пожалуйста, введите ваш никнейм для начала.';
+      // promoDiv и missionBtnBox остаются скрытыми/пустыми
     }
   } catch (e) {
     console.error("Общая ошибка в DOMContentLoaded:", e);
+    loadingBlock.style.display = 'none'; // Скрыть загрузку при ошибке
     resDiv.innerHTML = '<span class="error-message">Непредвиденная ошибка при загрузке.</span>';
+    resDiv.style.display = ''; // Показать блок с ошибкой
   }
 });
 
 document.getElementById('saveBtn').onclick = async () => {
   const nickInput = document.getElementById('nickname');
-  const enteredNick = nickInput.value.trim(); // Используем enteredNick
+  const enteredNick = nickInput.value.trim();
   const resDiv = document.getElementById('result');
   const nickBlock = document.getElementById('nickBlock');
   const refreshBtnElement = document.getElementById('refreshBtn');
@@ -108,12 +131,13 @@ document.getElementById('saveBtn').onclick = async () => {
 
   saveBtnElement.disabled = true;
   resDiv.innerHTML = 'Проверяем ник...';
+  resDiv.style.display = ''; // Показываем resDiv для сообщения "Проверяем ник..."
 
   try {
     let { data: existingUserWithNick, error: nickCheckError } = await supabase
       .from('user_stats')
       .select('tg_id')
-      .eq('nickname', enteredNick) // Проверяем enteredNick
+      .eq('nickname', enteredNick) 
       .not('tg_id', 'eq', tgId)
       .maybeSingle();
 
@@ -130,7 +154,6 @@ document.getElementById('saveBtn').onclick = async () => {
       return;
     }
 
-    // Используем type=exact для API
     const listResp = await fetch(`https://api.korabli.su/wows/account/list/?application_id=2ed4a3f67dc2d36d19643b616433ad9a&search=${encodeURIComponent(enteredNick)}&type=exact`);
     if (!listResp.ok) throw new Error(`Ошибка API korabli (list): ${listResp.status}`);
     const listData = await listResp.json();
@@ -141,7 +164,6 @@ document.getElementById('saveBtn').onclick = async () => {
       return;
     }
     
-    // Дополнительная проверка на точное совпадение (с учетом регистра для API, но не для введенного пользователем)
     const foundAccount = listData.data.find(acc => acc.nickname.toLowerCase() === enteredNick.toLowerCase());
 
     if (!foundAccount) {
@@ -150,7 +172,7 @@ document.getElementById('saveBtn').onclick = async () => {
         return;
     }
     const accountId = foundAccount.account_id;
-    const actualNickFromApi = foundAccount.nickname; // Используем ник из API
+    const actualNickFromApi = foundAccount.nickname;
 
     const statResp = await fetch(`https://api.korabli.su/wows/account/info/?application_id=2ed4a3f67dc2d36d19643b616433ad9a&account_id=${accountId}`);
     if (!statResp.ok) throw new Error(`Ошибка API korabli (info): ${statResp.status}`);
@@ -169,7 +191,6 @@ document.getElementById('saveBtn').onclick = async () => {
     }
     const battles = userData.statistics.battles ?? userData.statistics.pvp?.battles;
 
-    // Сохраняем actualNickFromApi
     const newUserRecord = { tg_id: tgId, nickname: actualNickFromApi, battles: battles, mission_battles: null, mission_time: null, promo: null, promo_time: null };
     const { error: upsertError } = await supabase.from('user_stats').upsert(newUserRecord, { onConflict: 'tg_id' });
 
@@ -180,17 +201,19 @@ document.getElementById('saveBtn').onclick = async () => {
       return;
     }
 
-    const baseContent = renderUserStat(newUserRecord, resDiv);
-    nickBlock.style.display = 'none';
-    refreshBtnElement.style.display = '';
+    nickBlock.style.display = 'none'; // Скрываем блок ввода
+    refreshBtnElement.style.display = ''; // Показываем кнопку обновить
+    // resDiv уже показан
     
-    promoDiv.innerHTML = '';       // Очищаем и скрываем промо
-    promoDiv.style.display = 'none'; // при новом входе
+    promoDiv.innerHTML = '';       
+    promoDiv.style.display = 'none'; 
+    const baseContent = renderUserStat(newUserRecord, resDiv); // Обновляем resDiv с данными пользователя
     await checkMission(newUserRecord, resDiv, refreshBtnElement, baseContent);
 
   } catch (e) {
     console.error("Ошибка при сохранении/проверке ника:", e);
     resDiv.innerHTML = `<span class="error-message">Ошибка: ${e.message || 'Произошла ошибка при получении статистики!'}</span>`;
+    // resDiv.style.display = ''; // Уже должен быть показан
   } finally {
     saveBtnElement.disabled = false;
   }
@@ -220,16 +243,15 @@ document.getElementById('refreshBtn').onclick = async () => {
 
     if (fetchError || !row) {
       console.error("Ошибка получения пользователя для обновления или пользователь не найден:", fetchError);
-      renderUserStat({}, resDiv);
+      renderUserStat({}, resDiv); // Очищаем старые данные из resDiv
       resDiv.innerHTML += '<br><span class="error-message">Ошибка: не найден пользователь для обновления!</span>';
       return;
     }
 
-    const listResp = await fetch(`https://api.korabli.su/wows/account/list/?application_id=2ed4a3f67dc2d36d19643b616433ad9a&search=${encodeURIComponent(row.nickname)}&type=exact`); // Добавим type=exact и здесь для консистентности
+    const listResp = await fetch(`https://api.korabli.su/wows/account/list/?application_id=2ed4a3f67dc2d36d19643b616433ad9a&search=${encodeURIComponent(row.nickname)}&type=exact`);
     if (!listResp.ok) throw new Error(`Ошибка API korabli (list): ${listResp.status}`);
     const listData = await listResp.json();
 
-    // При обновлении, если ник не найден (хотя должен быть, раз он в базе), это проблема
     if (listData.status === 'error' || !listData.data || !listData.data.length || listData.data[0].nickname.toLowerCase() !== row.nickname.toLowerCase()) {
       const baseContent = renderUserStat(row, resDiv);
       resDiv.innerHTML = baseContent + `<br><span class="warning-message">Ник ${row.nickname} не найден в игре при обновлении или изменился!</span>`;
@@ -340,10 +362,9 @@ async function onGetMission() {
       }
     }
 
-    const listResp = await fetch(`https://api.korabli.su/wows/account/list/?application_id=2ed4a3f67dc2d36d19643b616433ad9a&search=${encodeURIComponent(row.nickname)}&type=exact`); // type=exact и здесь
+    const listResp = await fetch(`https://api.korabli.su/wows/account/list/?application_id=2ed4a3f67dc2d36d19643b616433ad9a&search=${encodeURIComponent(row.nickname)}&type=exact`);
     if (!listResp.ok) throw new Error(`Ошибка API korabli (list): ${listResp.status}`);
     const listData = await listResp.json();
-    // Проверка, что API вернул именно тот ник, который у нас в базе (на случай если ник в игре сменился)
     if (listData.status === 'error' || !listData.data || !listData.data.length || listData.data[0].nickname.toLowerCase() !== row.nickname.toLowerCase()) {
         throw new Error(`Ник ${row.nickname} не найден или изменился в игре при получении БЗ`);
     }
@@ -406,7 +427,7 @@ function renderTimer(row, resDiv, secondsLeft) {
   
   let timer = Math.max(0, secondsLeft); 
   renderMissionBtn(false);
-  promoDiv.style.display = ''; // Показываем блок
+  promoDiv.style.display = ''; 
 
   const updateTimerDisplay = () => {
     let promoContent = '';
@@ -429,7 +450,6 @@ function renderTimer(row, resDiv, secondsLeft) {
       if (promoDiv) {
         promoDiv.innerHTML = promoContent +
           `Следующая БЗ будет доступна через: <br><span style="font-size: 1.2em; font-weight: bold;">${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}</span>`;
-        // promoDiv.style.display = ''; // Уже показан в начале renderTimer
       }
       timer--;
     }
@@ -445,7 +465,6 @@ async function checkMission(row, resDiv, refreshBtnElement, baseContentHTML = nu
   let currentResText = baseContentHTML || resDiv.innerHTML.split('<br><b>')[0] + '<br>';
   currentResText = currentResText.split('<span class="update-status-message">')[0].trim();
   if (currentResText && !currentResText.endsWith('<br>')) currentResText += '<br>';
-
 
   promoDiv.innerHTML = ''; 
   promoDiv.style.display = 'none'; 
