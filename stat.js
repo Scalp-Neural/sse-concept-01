@@ -195,8 +195,11 @@ function renderTimer(row, resDiv, secondsLeft) {
       renderMissionBtn(true, 0);
       resDiv.innerHTML += '<br><b>БЗ снова доступна!</b>';
     } else {
-      let hours = Math.floor(timer/3600), min = Math.floor((timer%3600)/60), sec = timer%60;
-      document.getElementById('getMissionBtn')?.innerText = `БЗ будет доступна через ${hours}ч ${min}м ${sec}с`;
+      let hours = Math.floor(timer / 3600);
+      let min = Math.floor((timer % 3600) / 60);
+      let sec = timer % 60;
+      const btn = document.getElementById('getMissionBtn');
+      if (btn) btn.innerText = `БЗ будет доступна через ${hours}ч ${min}м ${sec}с`;
       timer--;
     }
   }, 1000);
