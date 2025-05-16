@@ -8,13 +8,125 @@
   <!-- Supabase UMD -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.js"></script>
   <style>
-    body { background: #23272f; color: #fff; font-family: Arial, sans-serif; }
-    #appbox { max-width: 420px; margin: 40px auto; background: #292e36; border-radius: 10px; padding: 32px 24px; }
-    input, button { font-size: 1em; border-radius: 6px; border: none; padding: 8px 12px; margin-right: 8px; }
-    button { background: #19a974; color: #fff; cursor: pointer; transition: background 0.2s; }
-    button:disabled { background: #333; color: #aaa; }
-    #result { margin-top: 32px; font-size: 1.2em; }
-    #promo { margin-top: 16px; font-size: 1.5em; color: #fffd64; }
+    body {
+        background: #23272f;
+        color: #e0e0e0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+        margin: 0;
+        padding: 20px;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        min-height: calc(100vh - 40px); /* Учитываем padding */
+        box-sizing: border-box;
+    }
+    #appbox {
+        max-width: 420px;
+        width: 100%;
+        margin: 0 auto;
+        background: #292e36;
+        border-radius: 12px; /* Чуть больше скругление */
+        padding: 28px 24px; /* Немного измененный padding */
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.25);
+    }
+    input, button {
+        font-size: 1em;
+        border-radius: 8px; /* Согласованное скругление */
+        padding: 12px 15px; /* Увеличенный padding для лучшего тапа */
+        margin-bottom: 12px;
+        box-sizing: border-box;
+        width: 100%;
+        border: 1px solid #3e444e; /* Более заметная граница для инпута */
+    }
+    input {
+        background: #2c313a;
+        color: #fff;
+    }
+    input::placeholder {
+        color: #888e9e;
+    }
+    button {
+        background: #19a974;
+        color: #fff;
+        cursor: pointer;
+        transition: background 0.2s ease, transform 0.1s ease;
+        border: none; /* Убираем границу у кнопок, т.к. есть фон */
+        font-weight: 500; /* Немного жирнее текст кнопки */
+    }
+    button:hover:not(:disabled) {
+        background: #1cb87f;
+        transform: translateY(-2px); /* Более заметный подъем */
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    button:active:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    button:disabled {
+        background: #3a3f47;
+        color: #777c88;
+        cursor: not-allowed;
+    }
+    #nickBlock {
+        margin-bottom: 20px;
+    }
+    #nickBlock input {
+         margin-bottom: 10px; /* Отступ между инпутом и кнопкой "Войти" */
+    }
+
+    #refreshBtn {
+        background: #007bff; /* Синий для "Обновить" */
+        margin-top: 15px; /* Отступ сверху */
+    }
+    #refreshBtn:hover:not(:disabled) {
+        background: #0069d9;
+    }
+
+    #missionBtnBox {
+        margin-top: 15px; /* Отступ для контейнера кнопки БЗ */
+        margin-bottom: 5px; /* Небольшой отступ снизу, если за ней сразу #result */
+    }
+     /* Кнопка внутри #missionBtnBox будет использовать общие стили button */
+
+    #result, #promo {
+        margin-top: 24px;
+        padding: 18px; /* Увеличенный padding */
+        border-radius: 8px;
+        background: #313640; /* Чуть другой фон для выделения */
+        border: 1px solid #4a505c;
+        line-height: 1.6;
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); /* Внутренняя тень */
+    }
+    #result {
+        font-size: 1.15em;
+        color: #cdd3e0; /* Светлее текст для лучшей читаемости */
+    }
+    #result b {
+        color: #82c9e0; /* Светло-голубой для выделений */
+        font-weight: 600;
+    }
+    #result .error-message {
+        color: tomato;
+        font-weight: 500;
+    }
+    #result .warning-message {
+        color: orange;
+        font-weight: 500;
+    }
+
+    #promo {
+        font-size: 1.25em; /* Немного крупнее */
+        color: #fffd64;
+        text-align: center;
+    }
+    #promo b { /* Для самого промокода */
+        color: #ffffff;
+        font-weight: 700; /* Жирнее */
+        display: block;
+        margin-bottom: 8px;
+        font-size: 1.2em; /* Крупнее сам промокод */
+        letter-spacing: 1px; /* Небольшой разряд */
+    }
   </style>
 </head>
 <body>
